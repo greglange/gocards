@@ -325,6 +325,9 @@ func LoadCards(filepath string) ([]*Card, error) {
 	return cards, nil
 }
 
+// the key for the cards map returned is the file path for each card set
+// this means on windows the keys will have \'s
+// on linux the keys will have /'s
 func LoadCardData(filepath string, cards []*Card) ([]*Card, error) {
 	if _, err := os.Stat(filepath); errors.Is(err, os.ErrNotExist) {
 		return cards, nil

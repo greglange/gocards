@@ -299,6 +299,7 @@ func (h *httpHandler) pageMain(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "    <td>Blank</td>\n")
 	fmt.Fprintf(w, "    <td>New</td>\n")
 	fmt.Fprintf(w, "    <td>Due</td>\n")
+
 	intervalValue := -1
 	for i := 0; i < len(gocards.Intervals); i++ {
 		if intervalValue != gocards.Intervals[i] {
@@ -314,8 +315,13 @@ func (h *httpHandler) pageMain(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Strings(paths)
 
-	for _, path := range paths {
-		stats := h.stats[path]
+	for _, statsPath := range paths {
+		path := statsPath
+		// statsPath will have \'s on windows but we want /'s for urls and display
+		if runtime.GOOS == "windows" {
+			path = strings.ReplaceAll(statsPath, "\\", "/")
+		}
+		stats := h.stats[statsPath]
 		fmt.Fprintf(w, "<tr align=\"center\">\n")
 		fmt.Fprintf(w, "    <td><a href=\"%s\">%s</a></td>\n", path, path)
 		fmt.Fprintf(w, "    <td><a href=\"%s/all\">%d</a></td>\n", path, stats.TotalCount)
@@ -330,7 +336,6 @@ func (h *httpHandler) pageMain(w http.ResponseWriter, r *http.Request) {
 				if !ok {
 					count = 0
 				}
-
 				fmt.Fprintf(w, "    <td><a href=\"%s/%d\">%d</a></td>\n", path, intervalValue, count)
 			}
 		}
@@ -418,7 +423,9 @@ func (h *httpHandler) populateCardSetSession(r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	// here cardFile has /'s if it is in a directory
 	if runtime.GOOS == "windows" {
+		// make cardfile have \'s if on windows to match how paths are done there
 		cardFile = strings.ReplaceAll(cardFile, "/", "\\")
 	}
 	_, ok := h.stats[cardFile]
