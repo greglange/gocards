@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -416,6 +417,9 @@ func (h *httpHandler) populateCardSetSession(r *http.Request) error {
 	cardFile, spacedRepetition, cardType, cardInterval, err := h.parseCardSetUrl(r)
 	if err != nil {
 		return err
+	}
+	if runtime.GOOS == "windows" {
+		cardFile = strings.ReplaceAll(cardFile, "/", "\\")
 	}
 	_, ok := h.stats[cardFile]
 	if !ok {
