@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -24,12 +25,13 @@ import (
 )
 
 var mainFuncs = map[string]func(*options) error{
-	"http": mainHttp,
+	"clean": mainClean,
+	"http":  mainHttp,
 }
 
 var boolFlags = []string{}
 
-var stringFlags = []string{"path"}
+var stringFlags = []string{"file", "path"}
 
 type options struct {
 	b map[string]bool
@@ -79,7 +81,7 @@ type cardSet struct {
 }
 
 type httpHandler struct {
-	options_ *options
+	o        *options
 	stats    map[string]*gocards.CardSetStats
 	cardSets map[string]*cardSet
 	session  *cardSetSession
@@ -113,7 +115,7 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					pageMessage(w, "Unable to save card sets")
 					return
 				}
-				stats, err := gocards.GetCardDirectoryStats(h.options_.s["path"])
+				stats, err := gocards.GetCardDirectoryStats(h.o.s["path"])
 				if err != nil {
 					pageMessage(w, "Unable to load card data")
 					return
@@ -656,8 +658,24 @@ func main() {
 	}
 }
 
-func mainHttp(options *options) error {
-	httpHandler, err := newHttpHandler(options)
+func mainClean(o *options) error {
+	if o.s["file"] == "" {
+		return errors.New("--file must be specified")
+	}
+	filePath := filepath.Join(o.s["path"], o.s["file"])
+	cards, err := gocards.LoadCardsAndData(filePath)
+	if err != nil {
+		return err
+	}
+	err = gocards.SaveCardData(filePath+"d", cards, true)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func mainHttp(o *options) error {
+	httpHandler, err := newHttpHandler(o)
 	if err != nil {
 		return err
 	}

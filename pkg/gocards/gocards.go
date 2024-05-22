@@ -205,10 +205,10 @@ func errorWithLineNumber(err error, lineNumber int) error {
 	return errors.New(err.Error() + " on line " + strconv.Itoa(lineNumber))
 }
 
-func LoadCards(filepath string) ([]*Card, error) {
+func LoadCards(filePath string) ([]*Card, error) {
 	var err error
 
-	file, err := os.Open(filepath)
+	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -328,12 +328,12 @@ func LoadCards(filepath string) ([]*Card, error) {
 // the key for the cards map returned is the file path for each card set
 // this means on windows the keys will have \'s
 // on linux the keys will have /'s
-func LoadCardData(filepath string, cards []*Card) ([]*Card, error) {
-	if _, err := os.Stat(filepath); errors.Is(err, os.ErrNotExist) {
+func LoadCardData(filePath string, cards []*Card) ([]*Card, error) {
+	if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) {
 		return cards, nil
 	}
 
-	file, err := os.Open(filepath)
+	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -394,15 +394,15 @@ func LoadCardsAndData(cardsFilepath string) ([]*Card, error) {
 	return cards, nil
 }
 
-func SaveCardData(filepath string, cards []*Card, removeOld bool) error {
-	file, err := os.Create(filepath)
+func SaveCardData(filePath string, cards []*Card, clean bool) error {
+	file, err := os.Create(filePath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
 	for _, card := range cards {
-		if removeOld && !card.InCardFile {
+		if clean && !card.InCardFile {
 			continue
 		}
 
