@@ -181,16 +181,16 @@ func (h *httpHandler) getCards() ([]*gocards.Card, string, error) {
 	var msg string
 	if h.session.cardType == "all" {
 		cards = h.removeCardsDone(h.session.cardSet_.cards)
-		msg = fmt.Sprintf("all: %d", len(cards))
+		msg = fmt.Sprintf("all: %d done: %d", len(cards), len(h.session.cardsDone))
 	} else if h.session.cardType == "due_new" {
 		cards = gocards.GetDueOrNewCards(h.session.cardSet_.cards)
-		msg = fmt.Sprintf("due or new: %d", len(cards))
+		msg = fmt.Sprintf("due or new: %d done: %d", len(cards), len(h.session.cardsDone))
 	} else if h.session.cardType == "due" {
 		cards = gocards.GetDueCards(h.session.cardSet_.cards)
-		msg = fmt.Sprintf("due: %d", len(cards))
+		msg = fmt.Sprintf("due: %d done: %d", len(cards), len(h.session.cardsDone))
 	} else if h.session.cardType == "new" {
 		cards = gocards.GetIntervalCards(h.session.cardSet_.cards, 0)
-		msg = fmt.Sprintf("new: %d", len(cards))
+		msg = fmt.Sprintf("new: %d done: %d", len(cards), len(h.session.cardsDone))
 	} else {
 		cards = h.removeCardsDone(gocards.GetIntervalCards(h.session.cardSet_.cards, h.session.cardInterval))
 		msg = fmt.Sprintf("interval %d day(s): %d of %d correct", h.session.cardInterval, len(h.session.cardsDone), len(h.session.cardsDone)+len(cards))
@@ -243,6 +243,9 @@ func (h *httpHandler) handleCardSetPost(w http.ResponseWriter, r *http.Request) 
 				h.session.cardSet_.save = true
 				card.LastReviewTime = now
 				card.CorrectCount += 1
+				if card.Interval() > 0 {
+					h.session.cardsDone[card.Md5] = true
+				}
 			} else {
 				h.session.cardsDone[card.Md5] = true
 			}
