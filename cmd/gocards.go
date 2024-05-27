@@ -550,6 +550,18 @@ func markdownToHTML(markdown string) string {
 	return string(md.Render(doc, renderer))
 }
 
+func cardHtml(w http.ResponseWriter, card string) {
+	if strings.HasPrefix(card, "image:") {
+		fmt.Fprint(w, image(card[len("image:"):]))
+	} else if strings.HasPrefix(card, "images:") {
+		fmt.Fprint(w, images(card[len("images:"):]))
+	} else if strings.HasPrefix(card, "wikipedia:") {
+		fmt.Fprint(w, wikipediaImages(card[len("wikipedia:"):]))
+	} else {
+		fmt.Fprint(w, markdownToHTML(card))
+	}
+}
+
 func pageCardBack(w http.ResponseWriter, url string, card *gocards.Card, msg string) {
 	fmt.Fprintf(w, "<html><head></head><body>\n")
 	fmt.Fprintf(w, "<table><tr><td>\n")
@@ -568,7 +580,7 @@ func pageCardBack(w http.ResponseWriter, url string, card *gocards.Card, msg str
 	fmt.Fprintf(w, "</td>\n")
 	fmt.Fprintf(w, "<td><form><label>%s</label></form></td>\n", msg)
 	fmt.Fprintf(w, "</tr></table>\n")
-	fmt.Fprintf(w, markdownToHTML(card.Back))
+	cardHtml(w, card.Back)
 	fmt.Fprintf(w, "</body></html>\n")
 }
 
@@ -590,15 +602,7 @@ func pageCardFront(w http.ResponseWriter, url string, card *gocards.Card, msg st
 	fmt.Fprintf(w, "</td>\n")
 	fmt.Fprintf(w, "<td><form><label>%s</label></form></td>\n", msg)
 	fmt.Fprintf(w, "</tr></table>\n")
-	if strings.HasPrefix(card.Front, "image:") {
-		fmt.Fprint(w, image(card.Front[len("image:"):]))
-	} else if strings.HasPrefix(card.Front, "images:") {
-		fmt.Fprint(w, images(card.Front[len("images:"):]))
-	} else if strings.HasPrefix(card.Front, "wikipedia:") {
-		fmt.Fprint(w, wikipediaImages(card.Front[len("wikipedia:"):]))
-	} else {
-		fmt.Fprint(w, markdownToHTML(card.Front))
-	}
+	cardHtml(w, card.Front)
 	fmt.Fprintf(w, "</body></html>\n")
 }
 
