@@ -71,8 +71,6 @@ type cardSetSession struct {
 	cardType         string
 	cardInterval     int
 	cardsDone        map[string]bool
-	cardSubSet       map[string]bool
-	lastCardsSeen    []string
 }
 
 type cardSet struct {
@@ -172,21 +170,7 @@ func (h *httpHandler) getCard(cards []*gocards.Card) (*gocards.Card, error) {
 	if len(cards) == 0 {
 		return nil, errors.New("No cards to choose from")
 	}
-	i := rand.Intn(len(cards))
-	card := cards[i]
-	if len(cards) > 3 {
-		for inSlice(h.session.lastCardsSeen, card.Md5) {
-			i = (i + 1) % len(cards)
-			card = cards[i]
-		}
-		h.session.lastCardsSeen = append(h.session.lastCardsSeen, card.Md5)
-		if len(h.session.lastCardsSeen) > 3 {
-			h.session.lastCardsSeen = h.session.lastCardsSeen[len(h.session.lastCardsSeen)-3:]
-		}
-	} else {
-		h.session.lastCardsSeen = []string{}
-	}
-	return card, nil
+	return cards[rand.Intn(len(cards))], nil
 }
 
 func (h *httpHandler) getCards() ([]*gocards.Card, string, error) {
@@ -197,53 +181,46 @@ func (h *httpHandler) getCards() ([]*gocards.Card, string, error) {
 	var msg string
 	if h.session.cardType == "all" {
 		cards = h.removeCardsDone(h.session.cardSet_.cards)
-		msg = "all"
+		msg = fmt.Sprintf("all: %d", len(cards))
 	} else if h.session.cardType == "due_new" {
 		cards = gocards.GetDueOrNewCards(h.session.cardSet_.cards)
-		msg = "due or new"
+		msg = fmt.Sprintf("due or new: %d", len(cards))
 	} else if h.session.cardType == "due" {
 		cards = gocards.GetDueCards(h.session.cardSet_.cards)
-		msg = "due"
+		msg = fmt.Sprintf("due: %d", len(cards))
 	} else if h.session.cardType == "new" {
 		cards = gocards.GetIntervalCards(h.session.cardSet_.cards, 0)
-		msg = "new"
+		msg = fmt.Sprintf("new: %d", len(cards))
 	} else {
 		cards = h.removeCardsDone(gocards.GetIntervalCards(h.session.cardSet_.cards, h.session.cardInterval))
 		msg = fmt.Sprintf("interval %d day(s): %d of %d correct", h.session.cardInterval, len(h.session.cardsDone), len(h.session.cardsDone)+len(cards))
 	}
-	if len(cards) == 0 {
+	if len(cards) <= 10 {
 		return cards, msg, nil
 	}
-	if len(cards) > 10 {
-		cardSubSet := make([]*gocards.Card, 0)
+	maxCorrectCount := 0
+	for _, card := range cards {
+		if card.CorrectCount > maxCorrectCount {
+			maxCorrectCount = card.CorrectCount
+		}
+	}
+	correctCount := maxCorrectCount
+	cardSubset := []*gocards.Card{}
+	for len(cardSubset) < 10 {
 		for _, card := range cards {
-			_, ok := h.session.cardSubSet[card.Md5]
-			if ok {
-				cardSubSet = append(cardSubSet, card)
+			if card.CorrectCount == correctCount {
+				cardSubset = append(cardSubset, card)
 			}
-
-			if len(cardSubSet) >= 10 {
+			if len(cardSubset) >= 10 {
 				break
 			}
 		}
-		for len(cardSubSet) < 10 {
-			i := rand.Intn(len(cards))
-			for {
-				card := cards[i]
-				_, ok := h.session.cardSubSet[card.Md5]
-				if !ok {
-					cardSubSet = append(cardSubSet, card)
-					break
-				}
-				i = (i + 1) % len(cards)
-			}
+		correctCount -= 1
+		if correctCount < 0 {
+			break
 		}
-		cards = cardSubSet
 	}
-	for _, card := range cards {
-		h.session.cardSubSet[card.Md5] = true
-	}
-	return cards, msg, nil
+	return cardSubset, msg, nil
 }
 
 func (h *httpHandler) handleCardSetPost(w http.ResponseWriter, r *http.Request) (func(), error) {
@@ -444,7 +421,7 @@ func (h *httpHandler) populateCardSetSession(r *http.Request) error {
 			cardSet_ = &cardSet{false, cards}
 			h.cardSets[cardFile] = cardSet_
 		}
-		h.session = &cardSetSession{cardFile, cardSet_, spacedRepetition, cardType, cardInterval, map[string]bool{}, map[string]bool{}, []string{}}
+		h.session = &cardSetSession{cardFile, cardSet_, spacedRepetition, cardType, cardInterval, map[string]bool{}}
 	}
 	return nil
 }

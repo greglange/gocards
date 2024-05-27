@@ -79,7 +79,6 @@ func GetDueCards(cards []*Card) []*Card {
 
 func GetDueOrNewCards(cards []*Card) []*Card {
 	foundCards := []*Card{}
-	max_interval := 0
 	for _, card := range cards {
 		if card.Blank() {
 			continue
@@ -88,13 +87,7 @@ func GetDueOrNewCards(cards []*Card) []*Card {
 		if interval > 0 && !due {
 			continue
 		}
-		if interval > max_interval {
-			max_interval = interval
-			foundCards = []*Card{}
-		}
-		if interval == max_interval {
-			foundCards = append(foundCards, card)
-		}
+		foundCards = append(foundCards, card)
 	}
 	return foundCards
 }
