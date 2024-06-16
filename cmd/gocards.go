@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -193,7 +194,7 @@ func (h *httpHandler) getCards() ([]*gocards.Card, string, error) {
 		msg = fmt.Sprintf("new: %d done: %d", len(cards), len(h.session.cardsDone))
 	} else {
 		cards = h.removeCardsDone(gocards.GetIntervalCards(h.session.cardSet_.cards, h.session.cardInterval))
-		msg = fmt.Sprintf("interval %d day(s): %d of %d correct", h.session.cardInterval, len(h.session.cardsDone), len(h.session.cardsDone)+len(cards))
+		msg = fmt.Sprintf("interval %d day(s): %d done: %d", h.session.cardInterval, len(cards), len(h.session.cardsDone))
 	}
 	if len(cards) <= 10 {
 		return cards, msg, nil
@@ -470,17 +471,32 @@ func image(imageUrl string) string {
 	return fmt.Sprintf("<img src=\"%s\">\n", imageUrl)
 }
 
+func useImage(imageUrl string) bool {
+	if strings.HasPrefix(imageUrl, "https://en.wikipedia.org/static/images/") {
+		return false
+	} else if strings.HasPrefix(imageUrl, "https://upload.wikimedia.org/wikipedia/") {
+		if strings.HasSuffix(imageUrl, ".png") {
+			return false
+		}
+		re := regexp.MustCompile("([0-9]+)px")
+		m := re.FindStringSubmatch(imageUrl)
+		if len(m) > 0 {
+			px, err := strconv.Atoi(m[1])
+			return err == nil && px >= 100
+		}
+	}
+	return true
+}
+
 func images(urlString string) string {
 	pageUrl, err := url.Parse(urlString)
 	if err != nil {
 		return fmt.Sprintf("Error parsing url: %s", err)
 	}
-
 	data, err := getHtmlPage(urlString)
 	if err != nil {
 		return fmt.Sprintf("Error getting web page: %s", err)
 	}
-
 	imagesString := ""
 	tkn := html.NewTokenizer(strings.NewReader(data))
 	for {
@@ -500,7 +516,6 @@ func images(urlString string) string {
 						"",
 					}
 				} else if attr.Key == "src" {
-					image = true
 					url, err := url.Parse(attr.Val)
 					if err == nil {
 						if url.Host == "" {
@@ -509,10 +524,14 @@ func images(urlString string) string {
 						if url.Scheme == "" {
 							url.Scheme = pageUrl.Scheme
 						}
+						imageUrl := url.String()
 						t.Attr[i] = html.Attribute{
 							attr.Namespace,
 							attr.Key,
-							url.String(),
+							imageUrl,
+						}
+						if useImage(imageUrl) {
+							image = true
 						}
 					}
 				} else if attr.Key == "srcset" {
@@ -528,7 +547,6 @@ func images(urlString string) string {
 			}
 		}
 	}
-
 	return imagesString
 }
 
