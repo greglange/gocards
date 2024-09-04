@@ -148,15 +148,16 @@ func parseOneSide(s string) (string, string, int) {
 	} else {
 		var front string
 		var parseState int
-		switch trim(m[1]) {
+		switch trim(m[2]) {
 		case "`":
 			parseState = frontMulti
 		case "```":
 			parseState = frontMultiCode
+			front = "```"
 		default:
-			front = trim(m[1])
+			front = trim(m[2])
 		}
-		return trim(m[0]), front, parseState
+		return trim(m[1]), front, parseState
 	}
 }
 
