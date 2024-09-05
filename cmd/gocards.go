@@ -472,6 +472,8 @@ func image(imageUrl string) string {
 func useImage(imageUrl string) bool {
 	if strings.HasPrefix(imageUrl, "https://en.wikipedia.org/static/images/") {
 		return false
+	} else if strings.HasSuffix(imageUrl, "poweredby_mediawiki.svg") {
+		return false
 	} else if strings.HasPrefix(imageUrl, "https://upload.wikimedia.org/wikipedia/") {
 		if strings.HasSuffix(imageUrl, ".png") {
 			return false
