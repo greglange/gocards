@@ -115,7 +115,7 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			action := r.FormValue("action")
 			if action == "" {
 				pageMessage(w, "Action not defined")
-			} else if action == "update" {
+			} else if action == "save" {
 				err := h.saveCardSets()
 				if err != nil {
 					fmt.Println(err)
@@ -274,8 +274,8 @@ func (h *httpHandler) handleCardSetPost(w http.ResponseWriter, r *http.Request) 
 func (h *httpHandler) pageMain(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<html><head></head><body>\n")
 	fmt.Fprintf(w, "<form action=\"/\" method=\"POST\">\n"+
-		"<input type=\"hidden\" name=\"action\" value=\"update\">\n"+
-		"<input type=\"submit\" value=\"Update\">\n"+
+		"<input type=\"hidden\" name=\"action\" value=\"save\">\n"+
+		"<input type=\"submit\" value=\"Save\">\n"+
 		"</form>\n")
 	fmt.Fprintf(w, "<table border=\"1\">\n")
 	fmt.Fprintf(w, "<tr align=\"center\">\n")
@@ -297,11 +297,11 @@ func (h *httpHandler) pageMain(w http.ResponseWriter, r *http.Request) {
 	for _, cardSet := range h.cardSets {
 		stats := cardSet.Stats()
 		fmt.Fprintf(w, "<tr align=\"center\">\n")
-		fmt.Fprintf(w, "    <td><a href=\"%s\">%s</a></td>\n", stats.Id, stats.Id)
+		fmt.Fprintf(w, "    <td bgcolor=\"#D3D3D3\"><a href=\"%s\">%s</a></td>\n", stats.Id, stats.Id)
 		fmt.Fprintf(w, "    <td><a href=\"%s/all\">%d</a></td>\n", stats.Id, stats.TotalCount)
 		fmt.Fprintf(w, "    <td>%d</td>\n", stats.BlankCount)
-		fmt.Fprintf(w, "    <td><a href=\"%s/new\">%d</a></td>\n", stats.Id, stats.NewCount)
-		fmt.Fprintf(w, "    <td><a href=\"%s/due\">%d</a></td>\n", stats.Id, stats.DueCount)
+		fmt.Fprintf(w, "    <td bgcolor=\"#D3D3D3\"><a href=\"%s/new\">%d</a></td>\n", stats.Id, stats.NewCount)
+		fmt.Fprintf(w, "    <td bgcolor=\"#D3D3D3\"><a href=\"%s/due\">%d</a></td>\n", stats.Id, stats.DueCount)
 		intervalValue := -1
 		for i := 0; i < len(gocards.Intervals); i++ {
 			if intervalValue != gocards.Intervals[i] {
