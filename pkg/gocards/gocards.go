@@ -262,6 +262,9 @@ func findRemotePathCardSets(rootPath string, cardSetPaths []*CardSetPath, cardSe
 					dataPath = filepath.Join(rootPath, relPath) + "d"
 				}
 			}
+			if string(os.PathSeparator) != "/" {
+				id = strings.ReplaceAll(id, string(os.PathSeparator), "/")
+			}
 			cardSets = append(cardSets, NewCardSet(id, path, dataPath))
 			return nil
 		}
