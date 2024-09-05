@@ -8,9 +8,9 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -66,32 +66,39 @@ func getoptions() *options {
 }
 
 type cardSetSession struct {
-	cardFile         string
-	cardSet_         *cardSet
+	cardSet          *gocards.CardSet
 	spacedRepetition bool
 	cardType         string
 	cardInterval     int
 	cardsDone        map[string]bool
 }
 
-type cardSet struct {
-	save  bool
-	cards []*gocards.Card
-}
-
 type httpHandler struct {
 	o        *options
-	stats    map[string]*gocards.CardSetStats
-	cardSets map[string]*cardSet
+	cardSets []*gocards.CardSet
 	session  *cardSetSession
+	save     map[string]bool
 }
 
 func newHttpHandler(o *options) (*httpHandler, error) {
-	stats, err := gocards.GetCardDirectoryStats(o.s["path"])
+	cardFilesPath := filepath.Join(o.s["path"], "cardFiles")
+	paths, err := gocards.LoadCardSetPaths(cardFilesPath)
 	if err != nil {
 		return nil, err
 	}
-	return &httpHandler{o, stats, map[string]*cardSet{}, nil}, nil
+	cardSets, err := gocards.FindCardSets(o.s["path"], paths)
+	if err != nil {
+		return nil, err
+	}
+	err = gocards.LoadCardSets(cardSets)
+	if err != nil {
+		return nil, err
+	}
+	s := func(i, j int) bool {
+		return cardSets[i].Id < cardSets[j].Id
+	}
+	sort.Slice(cardSets, s)
+	return &httpHandler{o, cardSets, nil, map[string]bool{}}, nil
 }
 
 func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -111,20 +118,15 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} else if action == "update" {
 				err := h.saveCardSets()
 				if err != nil {
+					fmt.Println(err)
 					pageMessage(w, "Unable to save card sets")
 					return
 				}
-				stats, err := gocards.GetCardDirectoryStats(h.o.s["path"])
-				if err != nil {
-					pageMessage(w, "Unable to load card data")
-					return
-				}
-				h.stats = stats
 				h.pageMain(w, r)
 			} else if action == "main" {
 				h.pageMain(w, r)
 			} else {
-				pageMessage(w, "Inavlid action")
+				pageMessage(w, "Invalid action")
 			}
 		} else {
 			h.pageMain(w, r)
@@ -181,19 +183,19 @@ func (h *httpHandler) getCards() ([]*gocards.Card, string, error) {
 	var cards []*gocards.Card
 	var msg string
 	if h.session.cardType == "all" {
-		cards = h.removeCardsDone(h.session.cardSet_.cards)
+		cards = h.removeCardsDone(h.session.cardSet.Cards)
 		msg = fmt.Sprintf("all: %d done: %d", len(cards), len(h.session.cardsDone))
 	} else if h.session.cardType == "due_new" {
-		cards = gocards.GetDueOrNewCards(h.session.cardSet_.cards)
+		cards = gocards.GetDueOrNewCards(h.session.cardSet.Cards)
 		msg = fmt.Sprintf("due or new: %d done: %d", len(cards), len(h.session.cardsDone))
 	} else if h.session.cardType == "due" {
-		cards = gocards.GetDueCards(h.session.cardSet_.cards)
+		cards = gocards.GetDueCards(h.session.cardSet.Cards)
 		msg = fmt.Sprintf("due: %d done: %d", len(cards), len(h.session.cardsDone))
 	} else if h.session.cardType == "new" {
-		cards = gocards.GetIntervalCards(h.session.cardSet_.cards, 0)
+		cards = gocards.GetIntervalCards(h.session.cardSet.Cards, 0)
 		msg = fmt.Sprintf("new: %d done: %d", len(cards), len(h.session.cardsDone))
 	} else {
-		cards = h.removeCardsDone(gocards.GetIntervalCards(h.session.cardSet_.cards, h.session.cardInterval))
+		cards = h.removeCardsDone(gocards.GetIntervalCards(h.session.cardSet.Cards, h.session.cardInterval))
 		msg = fmt.Sprintf("interval %d day(s): %d done: %d", h.session.cardInterval, len(cards), len(h.session.cardsDone))
 	}
 	if len(cards) <= 10 {
@@ -241,7 +243,7 @@ func (h *httpHandler) handleCardSetPost(w http.ResponseWriter, r *http.Request) 
 		review, now := r.FormValue("review"), time.Now()
 		if review == "correct" {
 			if h.session.spacedRepetition {
-				h.session.cardSet_.save = true
+				h.save[h.session.cardSet.Id] = true
 				card.LastReviewTime = now
 				card.CorrectCount += 1
 				if card.Interval() > 0 {
@@ -252,7 +254,7 @@ func (h *httpHandler) handleCardSetPost(w http.ResponseWriter, r *http.Request) 
 			}
 		} else if review == "incorrect" {
 			if h.session.spacedRepetition {
-				h.session.cardSet_.save = true
+				h.save[h.session.cardSet.Id] = true
 				card.LastReviewTime = now
 				card.CorrectCount = 0
 			}
@@ -292,25 +294,14 @@ func (h *httpHandler) pageMain(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "</tr>\n")
 
-	paths := make([]string, 0, len(h.stats))
-	for path := range h.stats {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
-
-	for _, statsPath := range paths {
-		path := statsPath
-		// statsPath will have \'s on windows but we want /'s for urls and display
-		if runtime.GOOS == "windows" {
-			path = strings.ReplaceAll(statsPath, "\\", "/")
-		}
-		stats := h.stats[statsPath]
+	for _, cardSet := range h.cardSets {
+		stats := cardSet.Stats()
 		fmt.Fprintf(w, "<tr align=\"center\">\n")
-		fmt.Fprintf(w, "    <td><a href=\"%s\">%s</a></td>\n", path, path)
-		fmt.Fprintf(w, "    <td><a href=\"%s/all\">%d</a></td>\n", path, stats.TotalCount)
+		fmt.Fprintf(w, "    <td><a href=\"%s\">%s</a></td>\n", stats.Id, stats.Id)
+		fmt.Fprintf(w, "    <td><a href=\"%s/all\">%d</a></td>\n", stats.Id, stats.TotalCount)
 		fmt.Fprintf(w, "    <td>%d</td>\n", stats.BlankCount)
-		fmt.Fprintf(w, "    <td><a href=\"%s/new\">%d</a></td>\n", path, stats.NewCount)
-		fmt.Fprintf(w, "    <td><a href=\"%s/due\">%d</a></td>\n", path, stats.DueCount)
+		fmt.Fprintf(w, "    <td><a href=\"%s/new\">%d</a></td>\n", stats.Id, stats.NewCount)
+		fmt.Fprintf(w, "    <td><a href=\"%s/due\">%d</a></td>\n", stats.Id, stats.DueCount)
 		intervalValue := -1
 		for i := 0; i < len(gocards.Intervals); i++ {
 			if intervalValue != gocards.Intervals[i] {
@@ -319,7 +310,7 @@ func (h *httpHandler) pageMain(w http.ResponseWriter, r *http.Request) {
 				if !ok {
 					count = 0
 				}
-				fmt.Fprintf(w, "    <td><a href=\"%s/%d\">%d</a></td>\n", path, intervalValue, count)
+				fmt.Fprintf(w, "    <td><a href=\"%s/%d\">%d</a></td>\n", stats.Id, intervalValue, count)
 			}
 		}
 		fmt.Fprintf(w, "</tr>\n")
@@ -354,7 +345,7 @@ func (h *httpHandler) parseCardSetPost(r *http.Request) (string, *gocards.Card, 
 	}
 	var card *gocards.Card
 	found := false
-	for _, card = range h.session.cardSet_.cards {
+	for _, card = range h.session.cardSet.Cards {
 		if md5 == card.Md5 {
 			found = true
 			break
@@ -366,66 +357,60 @@ func (h *httpHandler) parseCardSetPost(r *http.Request) (string, *gocards.Card, 
 	return action, card, nil
 }
 
+func isInt(s string) bool {
+	_, err := strconv.Atoi(s)
+	return err == nil
+}
+
 func (h *httpHandler) parseCardSetUrl(r *http.Request) (string, bool, string, int, error) {
 	var err error
-	cardFile, spacedRepetition, cardType, cardInterval := "", false, "", -1
-	if strings.HasSuffix(r.URL.Path, ".cd") {
-		cardFile = r.URL.Path[1:]
+	cardSetId, spacedRepetition, cardType, cardInterval := "", false, "", -1
+	parts := strings.Split(r.URL.Path[1:], "/")
+	if len(parts) < 1 {
+		return "", false, "", -1, errors.New("Invalid path")
+	}
+	lastPart := parts[len(parts)-1]
+	if lastPart == "all" {
+		cardSetId = strings.Join(parts[:len(parts)-1], "/")
+		cardType = "all"
+	} else if lastPart == "new" {
+		cardSetId = strings.Join(parts[:len(parts)-1], "/")
+		cardType = "new"
+		spacedRepetition = true
+	} else if lastPart == "due" {
+		cardSetId = strings.Join(parts[:len(parts)-1], "/")
+		cardType = "due"
+		spacedRepetition = true
+	} else if isInt(lastPart) { // is number
+		cardSetId = strings.Join(parts[:len(parts)-1], "/")
+		cardInterval, err = strconv.Atoi(lastPart)
+		if err != nil {
+			return "", false, "", -1, errors.New("Invalid session interval")
+		}
+	} else {
+		cardSetId = strings.Join(parts[:len(parts)], "/")
 		cardType = "due_new"
 		spacedRepetition = true
-	} else {
-		parts := strings.Split(r.URL.Path[1:], "/")
-		if len(parts) < 2 {
-			return "", false, "", -1, errors.New("Invalid path")
-		}
-		if !strings.HasSuffix(parts[len(parts)-2], ".cd") {
-			return "", false, "", -1, errors.New("Invalid path")
-		}
-		cardFile = strings.Join(parts[:len(parts)-1], "/")
-		lastPart := parts[len(parts)-1]
-		if lastPart == "all" {
-			cardType = "all"
-		} else if lastPart == "new" {
-			cardType = "new"
-			spacedRepetition = true
-		} else if lastPart == "due" {
-			cardType = "due"
-			spacedRepetition = true
-		} else {
-			cardInterval, err = strconv.Atoi(lastPart)
-			if err != nil {
-				return "", false, "", -1, errors.New("Invalid session interval")
-			}
-		}
 	}
-	return cardFile, spacedRepetition, cardType, cardInterval, nil
+	return cardSetId, spacedRepetition, cardType, cardInterval, nil
 }
 
 func (h *httpHandler) populateCardSetSession(r *http.Request) error {
-	cardFile, spacedRepetition, cardType, cardInterval, err := h.parseCardSetUrl(r)
+	cardSetId, spacedRepetition, cardType, cardInterval, err := h.parseCardSetUrl(r)
 	if err != nil {
 		return err
 	}
-	// here cardFile has /'s if it is in a directory
-	if runtime.GOOS == "windows" {
-		// make cardfile have \'s if on windows to match how paths are done there
-		cardFile = strings.ReplaceAll(cardFile, "/", "\\")
-	}
-	_, ok := h.stats[cardFile]
-	if !ok {
-		return errors.New("Card file not found")
-	}
 	if r.Method == "GET" {
-		cardSet_, ok := h.cardSets[cardFile]
-		if !ok {
-			cards, err := gocards.LoadCardsAndData(cardFile)
-			if err != nil {
-				return errors.New("Unable to load card file")
+		var cardSet *gocards.CardSet
+		for _, c := range h.cardSets {
+			if cardSetId == c.Id {
+				cardSet = c
 			}
-			cardSet_ = &cardSet{false, cards}
-			h.cardSets[cardFile] = cardSet_
 		}
-		h.session = &cardSetSession{cardFile, cardSet_, spacedRepetition, cardType, cardInterval, map[string]bool{}}
+		if cardSet == nil {
+			return errors.New("Invalid card set")
+		}
+		h.session = &cardSetSession{cardSet, spacedRepetition, cardType, cardInterval, map[string]bool{}}
 	}
 	return nil
 }
@@ -442,15 +427,28 @@ func (h *httpHandler) removeCardsDone(cards []*gocards.Card) []*gocards.Card {
 }
 
 func (h *httpHandler) saveCardSets() error {
-	for cardFile, cardSet := range h.cardSets {
-		if cardSet.save {
-			err := gocards.SaveCardData(cardFile+"d", cardSet.cards, false)
-			if err != nil {
-				return err
+	for cardSetId := range h.save {
+		var cardSet *gocards.CardSet
+		for _, c := range h.cardSets {
+			if cardSetId == c.Id {
+				cardSet = c
 			}
-			cardSet.save = false
+		}
+		if cardSet == nil {
+			return errors.New("Unable to find card set")
+		}
+		dir := filepath.Dir(cardSet.CardDataPath)
+		// TODO: what is the right file perms here?
+		err := os.MkdirAll(dir, 0755)
+		if err != nil {
+			return err
+		}
+		err = cardSet.SaveData(false)
+		if err != nil {
+			return err
 		}
 	}
+	h.save = map[string]bool{}
 	return nil
 }
 

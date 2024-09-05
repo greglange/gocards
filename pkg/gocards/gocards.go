@@ -105,7 +105,199 @@ func GetIntervalCards(cards []*Card, interval int) []*Card {
 	return foundCards
 }
 
+type CardSet struct {
+	Id           string
+	CardFilePath string
+	CardDataPath string
+	Cards        []*Card
+}
+
+func NewCardSet(id, cardFilePath, cardDataPath string) *CardSet {
+	return &CardSet{id, cardFilePath, cardDataPath, nil}
+}
+
+func (cs *CardSet) Load() error {
+	var err error
+	cs.Cards, err = LoadCards(cs.CardFilePath)
+	if err != nil {
+		return err
+	}
+	cs.Cards, err = LoadCardData(cs.CardDataPath, cs.Cards)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cs *CardSet) SaveData(clean bool) error {
+	return SaveCardData(cs.CardDataPath, cs.Cards, clean)
+}
+
+func (cs *CardSet) Stats() *CardSetStats {
+	stats := NewCardSetStats(cs.Id)
+	for _, card := range cs.Cards {
+		stats.TotalCount += 1
+		if card.InCardFile {
+			stats.CardCount += 1
+		} else {
+			stats.OldCount += 1
+			continue
+		}
+		if card.Blank() {
+			stats.BlankCount += 1
+			continue
+		}
+		due, interval := card.Due()
+		_, ok := stats.IntervalCount[interval]
+		if ok {
+			stats.IntervalCount[interval] += 1
+		} else {
+			stats.IntervalCount[interval] = 1
+		}
+		if interval == 0 {
+			stats.NewCount += 1
+		} else if due {
+			stats.DueCount += 1
+		}
+	}
+	return stats
+}
+
+type CardSetPath struct {
+	RootPath     string
+	RelativePath string
+	RenamePath   string
+}
+
+func LoadCardSetPaths(filePath string) ([]*CardSetPath, error) {
+	paths := []*CardSetPath{}
+	if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) {
+		return paths, nil
+	}
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+		var path *CardSetPath
+		if len(fields) == 2 {
+			path = &CardSetPath{fields[0], fields[1], ""}
+		} else if len(fields) == 3 {
+			path = &CardSetPath{fields[0], fields[1], fields[2]}
+		} else {
+			// TODO: better error message with line number and number of fields
+			return nil, errors.New("Unexpected number of fields")
+		}
+		paths = append(paths, path)
+	}
+	return paths, nil
+}
+
+func findRootPathCardSets(rootPath string) ([]*CardSet, error) {
+	cardSets := []*CardSet{}
+	walk := func(path string, f os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if f.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(path, ".cd") {
+			return nil
+		}
+		id, err := filepath.Rel(rootPath, path)
+		if err != nil {
+			return err
+		}
+		cardSets = append(cardSets, NewCardSet(id, path, path+"d"))
+		return nil
+	}
+	err := filepath.Walk(rootPath, walk)
+	if err != nil {
+		return nil, err
+	}
+	return cardSets, nil
+}
+
+func findRemotePathCardSets(rootPath string, cardSetPaths []*CardSetPath, cardSets []*CardSet) ([]*CardSet, error) {
+	for _, csp := range cardSetPaths {
+		walk := func(path string, f os.FileInfo, err error) error {
+			var id, dataPath string
+			if err != nil {
+				return err
+			}
+			if f.IsDir() {
+				return nil
+			}
+			if !strings.HasSuffix(path, ".cd") {
+				return nil
+			}
+			if strings.HasSuffix(csp.RelativePath, ".cd") {
+				if len(csp.RenamePath) > 0 {
+					id = strings.TrimSuffix(csp.RenamePath, ".cd")
+					dataPath = filepath.Join(rootPath, csp.RenamePath) + ".d"
+				} else {
+					id = strings.TrimSuffix(csp.RelativePath, ".cd")
+					dataPath = filepath.Join(rootPath, csp.RelativePath) + ".d"
+				}
+			} else {
+				relPath, err := filepath.Rel(csp.RootPath, path)
+				if err != nil {
+					return err
+				}
+				if len(csp.RenamePath) > 0 {
+					renamePath := filepath.Join(csp.RootPath, csp.RelativePath)
+					endPath, err := filepath.Rel(renamePath, path)
+					if err != nil {
+						return err
+					}
+					id = strings.TrimSuffix(filepath.Join(csp.RenamePath, endPath), ".cd")
+					dataPath = filepath.Join(rootPath, csp.RenamePath, endPath) + "d"
+				} else {
+					id = strings.TrimSuffix(filepath.Join(rootPath, relPath), ".cd")
+					dataPath = filepath.Join(rootPath, relPath) + "d"
+				}
+			}
+			cardSets = append(cardSets, NewCardSet(id, path, dataPath))
+			return nil
+		}
+		path := filepath.Join(csp.RootPath, csp.RelativePath)
+		err := filepath.Walk(path, walk)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return cardSets, nil
+}
+
+func FindCardSets(rootPath string, cardSetPaths []*CardSetPath) ([]*CardSet, error) {
+	cardSets, err := findRootPathCardSets(rootPath)
+	if err != nil {
+		return nil, err
+	}
+	cardSets, err = findRemotePathCardSets(rootPath, cardSetPaths, cardSets)
+	if err != nil {
+		return nil, err
+	}
+	return cardSets, nil
+}
+
+func LoadCardSets(cardSets []*CardSet) error {
+	for _, cs := range cardSets {
+		err := cs.Load()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type CardSetStats struct {
+	Id            string
 	IntervalCount map[int]int
 	TotalCount    int
 	BlankCount    int
@@ -115,8 +307,8 @@ type CardSetStats struct {
 	OldCount      int
 }
 
-func NewCardSetStats() *CardSetStats {
-	return &CardSetStats{IntervalCount: make(map[int]int)}
+func NewCardSetStats(id string) *CardSetStats {
+	return &CardSetStats{Id: id, IntervalCount: make(map[int]int)}
 }
 
 func trim(s string) string {
@@ -413,69 +605,4 @@ func SaveCardData(filePath string, cards []*Card, clean bool) error {
 	}
 
 	return nil
-}
-
-func GetCardFileStats(cardsFilepath string) (*CardSetStats, error) {
-	cards, err := LoadCardsAndData(cardsFilepath)
-	if err != nil {
-		return nil, err
-	}
-
-	stats := NewCardSetStats()
-
-	for _, card := range cards {
-		stats.TotalCount += 1
-
-		if card.InCardFile {
-			stats.CardCount += 1
-		} else {
-			stats.OldCount += 1
-			continue
-		}
-
-		if card.Blank() {
-			stats.BlankCount += 1
-			continue
-		}
-
-		due, interval := card.Due()
-
-		_, ok := stats.IntervalCount[interval]
-		if ok {
-			stats.IntervalCount[interval] += 1
-		} else {
-			stats.IntervalCount[interval] = 1
-		}
-
-		if interval == 0 {
-			stats.NewCount += 1
-		} else if due {
-			stats.DueCount += 1
-		}
-	}
-
-	return stats, nil
-}
-
-func GetCardDirectoryStats(directoryPath string) (map[string]*CardSetStats, error) {
-	stats := make(map[string]*CardSetStats)
-	walk := func(path string, f os.FileInfo, err error) error {
-		if f.IsDir() {
-			return nil
-		}
-		if !strings.HasSuffix(path, ".cd") {
-			return nil
-		}
-		stats[path], err = GetCardFileStats(path)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
-	err := filepath.Walk(directoryPath, walk)
-	if err != nil {
-		return nil, err
-	}
-	return stats, nil
 }
