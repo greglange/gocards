@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/html"
 )
 
+// List of main functions, functions that are run because of a command line flag.
 var mainFuncs = map[string]func(*options) error{
 	"clean": mainClean,
 	"http":  mainHttp,
@@ -39,7 +40,8 @@ type options struct {
 	s map[string]string
 }
 
-func getoptions() *options {
+// getOptions parses the command line flags and returns a populated *options.
+func getOptions() *options {
 	b := map[string]*bool{}
 	s := map[string]*string{}
 	for f, _ := range mainFuncs {
@@ -65,6 +67,7 @@ func getoptions() *options {
 	return &o
 }
 
+// Struct to hold information about a session of doing cards.
 type cardSetSession struct {
 	cardSet          *gocards.CardSet
 	spacedRepetition bool
@@ -73,6 +76,8 @@ type cardSetSession struct {
 	cardsDone        map[string]bool
 }
 
+// Struct with data needed to serve web pages and respond to requests.
+// This struct is passed to the http.Handle function.
 type httpHandler struct {
 	o        *options
 	cardSets []*gocards.CardSet
@@ -80,6 +85,12 @@ type httpHandler struct {
 	save     map[string]bool
 }
 
+// newHttpHandler returns a populated *httpHandler struct.
+// Loads the "cardFiles" file if it exists.
+// Finds card set files.
+// Loads card files and data files.
+// Sorts the cardSets slice by card set id.
+// An error is returned if one occurs.
 func newHttpHandler(o *options) (*httpHandler, error) {
 	cardFilesPath := filepath.Join(o.s["path"], "cardFiles")
 	paths, err := gocards.LoadCardSetPaths(cardFilesPath)
@@ -101,6 +112,9 @@ func newHttpHandler(o *options) (*httpHandler, error) {
 	return &httpHandler{o, cardSets, nil, map[string]bool{}}, nil
 }
 
+// ServeHttp serves web pages.
+// Parses the path of requests and calls the right function based on that path.
+// When a "save" form post is received, any card sets with data that need to be saved are written to disk.
 func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// this is supposed to prevent the browser from caching pages
 	// https://stackoverflow.com/questions/69597242/golang-prevent-browser-cache-pages-when-clicking-back-button
@@ -118,7 +132,6 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} else if action == "save" {
 				err := h.saveCardSets()
 				if err != nil {
-					fmt.Println(err)
 					pageMessage(w, "Unable to save card sets")
 					return
 				}
@@ -136,21 +149,32 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// cardSet is called by ServeHttp when a request path is for a card set.
+// This path is requested by clicking a link on the main page.
+// This path is also requested by clicking some of the buttons on a card's page.
+// The first request to a card set when doing cards is a GET.
+// Populates the card set session in the httpHandler on a GET.
+// When doing cards, requests are POSTs.
 func (h *httpHandler) cardSet(w http.ResponseWriter, r *http.Request) {
 	var err error
-	err = h.populateCardSetSession(r)
-	if err != nil {
-		pageError(w, err)
+	if r.Method == "GET" {
+		err = h.populateCardSetSession(r)
+		if err != nil {
+			pageError(w, err)
+			return
+		}
 	}
 	r.ParseForm()
-	f, err := h.handleCardSetPost(w, r)
-	if err != nil {
-		pageError(w, err)
-		return
-	}
-	if f != nil {
-		f()
-		return
+	if r.Method == "POST" {
+		f, err := h.handleCardSetPost(w, r)
+		if err != nil {
+			pageError(w, err)
+			return
+		}
+		if f != nil {
+			f()
+			return
+		}
 	}
 	cards, msg, err := h.getCards()
 	if err != nil {
@@ -169,6 +193,7 @@ func (h *httpHandler) cardSet(w http.ResponseWriter, r *http.Request) {
 	pageCardFront(w, r.URL.Path, card, msg)
 }
 
+// getCard returns a *gocards.Card from the list of cards passed in.
 func (h *httpHandler) getCard(cards []*gocards.Card) (*gocards.Card, error) {
 	if len(cards) == 0 {
 		return nil, errors.New("No cards to choose from")
@@ -176,6 +201,11 @@ func (h *httpHandler) getCard(cards []*gocards.Card) (*gocards.Card, error) {
 	return cards[rand.Intn(len(cards))], nil
 }
 
+// getCards returns a list of cards to do based on the values in the handler.
+// Also returns a msg string to display at the top of the page.
+// Returns an error if one occurs.
+// At most 10 cards are returned.
+// The list returned is passed to the getCard method to get the card to use.
 func (h *httpHandler) getCards() ([]*gocards.Card, string, error) {
 	if h.session == nil {
 		return nil, "", errors.New("Session not defined")
@@ -226,10 +256,14 @@ func (h *httpHandler) getCards() ([]*gocards.Card, string, error) {
 	return cardSubset, msg, nil
 }
 
+// handleCardSetPost is called when a POST happens on a card set path.
+// Processes "back" button pushes.
+// Processes "correct" and "incorrect" button pushes.
+// Processes "skip" button pushes.
+// For "back" button pushes this retuns a function to call to display the back of the card.
+// In all other cases, nil is returned.
+// An error is returned if one occurs.
 func (h *httpHandler) handleCardSetPost(w http.ResponseWriter, r *http.Request) (func(), error) {
-	if r.Method != "POST" {
-		return nil, nil
-	}
 	action, card, err := h.parseCardSetPost(r)
 	if err != nil {
 		return nil, err
@@ -271,6 +305,10 @@ func (h *httpHandler) handleCardSetPost(w http.ResponseWriter, r *http.Request) 
 	return nil, nil
 }
 
+// pageMain displays the main page of the web app.
+// The URL for this page is just "/".
+// The page is a table with rows of card sets and links to do cards.
+// The page also has a "save" button that will save data for cards that need to be written to disk.
 func (h *httpHandler) pageMain(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<html><head></head><body>\n")
 	fmt.Fprintf(w, "<form action=\"/\" method=\"POST\">\n"+
@@ -319,6 +357,7 @@ func (h *httpHandler) pageMain(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "</body></html>\n")
 }
 
+// pagemessage displays a webpage with a message on it.
 func pageMessage(w http.ResponseWriter, msg string) {
 	fmt.Fprintf(w, "<html><head></head><body>\n")
 	fmt.Fprintf(w, "<table><tr><td>\n")
@@ -331,6 +370,10 @@ func pageMessage(w http.ResponseWriter, msg string) {
 	fmt.Fprintf(w, "</body></html>\n")
 }
 
+// parseCardSetPost parses POST requests to card set urls.
+// Returns a string that is the "action" value of the POST.
+// Returns the card being done as a *gocards.Card.
+// Returns an error if one occurs.
 func (h *httpHandler) parseCardSetPost(r *http.Request) (string, *gocards.Card, error) {
 	if h.session == nil {
 		return "", nil, errors.New("Session not defined")
@@ -357,11 +400,18 @@ func (h *httpHandler) parseCardSetPost(r *http.Request) (string, *gocards.Card, 
 	return action, card, nil
 }
 
+// isInt returns true of the string is an integer.
 func isInt(s string) bool {
 	_, err := strconv.Atoi(s)
 	return err == nil
 }
 
+// parseCardSetUrl parses the url for a card set.
+// Returns card set id.
+// Returns a bool set to true if the URL is for a spaced repetition session.
+// Returns string for display that is the type of cards for this session.
+// Retruns a non-negative integer if this session is for a particular interval.
+// Retuns an error if one occurs.
 func (h *httpHandler) parseCardSetUrl(r *http.Request) (string, bool, string, int, error) {
 	var err error
 	cardSetId, spacedRepetition, cardType, cardInterval := "", false, "", -1
@@ -395,26 +445,31 @@ func (h *httpHandler) parseCardSetUrl(r *http.Request) (string, bool, string, in
 	return cardSetId, spacedRepetition, cardType, cardInterval, nil
 }
 
+// populateCardSetSession populates the session value in the http handler.
+// Session information is determined by parsing the URL.
+// Should only be called on the initial GET of session of doing a card set.
+// Returns an error if one occurs.
 func (h *httpHandler) populateCardSetSession(r *http.Request) error {
 	cardSetId, spacedRepetition, cardType, cardInterval, err := h.parseCardSetUrl(r)
 	if err != nil {
 		return err
 	}
-	if r.Method == "GET" {
-		var cardSet *gocards.CardSet
-		for _, c := range h.cardSets {
-			if cardSetId == c.Id {
-				cardSet = c
-			}
+	var cardSet *gocards.CardSet
+	for _, c := range h.cardSets {
+		if cardSetId == c.Id {
+			cardSet = c
 		}
-		if cardSet == nil {
-			return errors.New("Invalid card set")
-		}
-		h.session = &cardSetSession{cardSet, spacedRepetition, cardType, cardInterval, map[string]bool{}}
 	}
+	if cardSet == nil {
+		return errors.New("Invalid card set")
+	}
+	h.session = &cardSetSession{cardSet, spacedRepetition, cardType, cardInterval, map[string]bool{}}
 	return nil
 }
 
+// removeCardsDone removes cards from the slice passed in that have been completed in this session.
+// This checks the cardsDone variable in the section to determine if a card has been done.
+// Returns []*gocards.Cards with cards that have not been done yet.
 func (h *httpHandler) removeCardsDone(cards []*gocards.Card) []*gocards.Card {
 	undone := make([]*gocards.Card, 0)
 	for _, card := range cards {
@@ -426,6 +481,8 @@ func (h *httpHandler) removeCardsDone(cards []*gocards.Card) []*gocards.Card {
 	return undone
 }
 
+// saveCardSets saves the data for card sets that need to be written to disk.
+// returns an error if one occurs.
 func (h *httpHandler) saveCardSets() error {
 	for cardSetId := range h.save {
 		var cardSet *gocards.CardSet
@@ -452,6 +509,9 @@ func (h *httpHandler) saveCardSets() error {
 	return nil
 }
 
+// getHtmlPage gets the web page for the URL passed in.
+// Returns the body of the page as a string on success.
+// Returns an error if one occurs.
 func getHtmlPage(requestUrl string) (string, error) {
 	resp, err := http.Get(requestUrl)
 	if err != nil {
@@ -465,10 +525,15 @@ func getHtmlPage(requestUrl string) (string, error) {
 	return string(body), nil
 }
 
+// image makes an image html tag from the image url passed in.
+// Returns a string that is the tag.
 func image(imageUrl string) string {
 	return fmt.Sprintf("<img src=\"%s\">\n", imageUrl)
 }
 
+// useImage filters images to be displayed.
+// An image url is passed in.
+// True is returned if the image should be used.
 func useImage(imageUrl string) bool {
 	if strings.HasPrefix(imageUrl, "https://en.wikipedia.org/static/images/") {
 		return false
@@ -488,6 +553,9 @@ func useImage(imageUrl string) bool {
 	return true
 }
 
+// images requests the web page for the url passed in and returns a string of image html tags.
+// images found on the page are filtered by calling the useImage function.
+// Errors are returned as a string if they occur.
 func images(urlString string) string {
 	pageUrl, err := url.Parse(urlString)
 	if err != nil {
@@ -504,7 +572,6 @@ func images(urlString string) string {
 		if tt == html.ErrorToken {
 			break
 		}
-
 		image := false
 		t := tkn.Token()
 		if t.Data == "img" {
@@ -550,6 +617,7 @@ func images(urlString string) string {
 	return imagesString
 }
 
+// inSlice returns true if the string is in the slice.
 func inSlice(s []string, i string) bool {
 	for _, j := range s {
 		if i == j {
@@ -559,6 +627,7 @@ func inSlice(s []string, i string) bool {
 	return false
 }
 
+// markdownToHTML turns the markdown passed in to html that it returns.
 func markdownToHTML(markdown string) string {
 	extensions := mdparser.CommonExtensions | mdparser.AutoHeadingIDs | mdparser.NoEmptyLineBeforeBlock
 	p := mdparser.NewWithExtensions(extensions)
@@ -571,6 +640,8 @@ func markdownToHTML(markdown string) string {
 	return string(md.Render(doc, renderer))
 }
 
+// cardHtml turns a card side into html.
+// The html is written using the http.ResponseWriter.
 func cardHtml(w http.ResponseWriter, card string) {
 	if strings.HasPrefix(card, "image:") {
 		fmt.Fprint(w, image(card[len("image:"):]))
@@ -583,6 +654,7 @@ func cardHtml(w http.ResponseWriter, card string) {
 	}
 }
 
+// pageCardBack displays the back of a card.
 func pageCardBack(w http.ResponseWriter, url string, card *gocards.Card, msg string) {
 	fmt.Fprintf(w, "<html><head></head><body>\n")
 	fmt.Fprintf(w, "<table><tr><td>\n")
@@ -605,6 +677,7 @@ func pageCardBack(w http.ResponseWriter, url string, card *gocards.Card, msg str
 	fmt.Fprintf(w, "</body></html>\n")
 }
 
+// pageCardFront displays the front of a card.
 func pageCardFront(w http.ResponseWriter, url string, card *gocards.Card, msg string) {
 	fmt.Fprintf(w, "<html><head></head><body>\n")
 	fmt.Fprintf(w, "<table><tr><td>\n")
@@ -627,17 +700,20 @@ func pageCardFront(w http.ResponseWriter, url string, card *gocards.Card, msg st
 	fmt.Fprintf(w, "</body></html>\n")
 }
 
+// pageError displays the error.
 func pageError(w http.ResponseWriter, err error) {
 	pageMessage(w, err.Error())
 }
 
+// wikipediaImages gets the images on a wikipedia page.
 func wikipediaImages(searchString string) string {
 	requestUrl := fmt.Sprintf("https://en.wikipedia.org/wiki/%s", searchString)
 	return images(requestUrl)
 }
 
+// main parses the command line options and calls the right main function.
 func main() {
-	o := getoptions()
+	o := getOptions()
 	var err error
 	var mainFunc func(*options) error
 	for k, v := range mainFuncs {
@@ -660,6 +736,8 @@ func main() {
 	}
 }
 
+// mainClean removes cards from the data file that no longer exist in the cards file.
+// TODO: fix this - this broke with the remote card set change
 func mainClean(o *options) error {
 	if o.s["file"] == "" {
 		return errors.New("--file must be specified")
@@ -676,6 +754,7 @@ func mainClean(o *options) error {
 	return nil
 }
 
+// mainHttp serves webpages.
 func mainHttp(o *options) error {
 	httpHandler, err := newHttpHandler(o)
 	if err != nil {
