@@ -78,11 +78,11 @@ The README file in this repo describes how to make card files and cards inside t
 
 ## Card file location
 
-Card files can be anywhere in the directory tree under a root directory you have selected for your Gocards usage. Just make directories and card files under the root directory and the `gocards` command will find them.
+Card files can be anywhere in the directory tree under the root directory you have selected for your Gocards usage. Just make directories and card files under the root directory and the `gocards` command will find them.
 
 Card files can also be in a different location on your file system. This is useful when using card files that others have made and made available for use (for example in a [git repo](https://github.com/greglange/gocards-cards)).
 
-To use card files that are outside your Gocards root directory, create a `cardFiles` files in your Gocards root directory that tells the `gocards` command where to look for card files.
+To use card files that are outside your Gocards root directory, create a `cardFiles` file in your Gocards root directory that tells the `gocards` command where to look for card files.
 
 To specify a directory (and subdirectories) to look for cards in, put a line like this in the file:
 
@@ -117,4 +117,12 @@ For example, look at this `cardFiles` file:
 /home/glange/git/source2/ spanish spanish2
 ```
 
-This will result in the card files in `/home/glange/git/source1/spanish` to be mapped to the directory `spanish1` and the card files in `/home/glange/git/source2/spanish` to be mapped to the directory `spanish2` in your Gocards root directory. This change of names will also be reflected in the name of the card sets when doing cards in the browser.
+This will result in the card files in `/home/glange/git/source1/spanish` to be remapped to the directory `spanish1` and the card files in `/home/glange/git/source2/spanish` to be remapped to the directory `spanish2` in your Gocards root directory. This change of names will also be reflected in the name of the card sets when doing cards in the browser.
+
+To remap the name of a single card file you want to use, do something like this:
+
+```
+/home/glange/git/gocards-cards/ spanish/nouns.cd languages/spanish/nouns.cd
+```
+
+(Note that you need to specify a card file relative path for the third value.)
