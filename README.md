@@ -80,7 +80,7 @@ The README file in this repo describes how to make card files and cards inside t
 
 Card files can be anywhere in the directory tree under the root directory you have selected for your Gocards usage. Just make directories and card files under the root directory and the `gocards` command will find them.
 
-Card files can also be in a different location on your file system. This is useful when using card files that others have made and made available for use (for example in a [git repo](https://github.com/greglange/gocards-cards)).
+Card files can also be in other locations on your file system. This is useful when using card files that others have made and made available for use (for example in a [git repo](https://github.com/greglange/gocards-cards)) or if you want to make card files you've made available to others.
 
 To use card files that are outside your Gocards root directory, create a `cardFiles` file in your Gocards root directory that tells the `gocards` command where to look for card files.
 
@@ -106,7 +106,7 @@ This will let you use the card file `spanish/nouns.cd` found at `/home/glange/gi
 
 For now, you need to use full paths in `cardFiles`.
 
-You can use a mixture of local and remote card file locations.
+You can use a mixture of local and remote card file locations. The `gocards` command will find card files under your Gocards root directory and any locations in a `cardFiles` file that you create.
 
 It is possible to change where the data files are written inside your Gocards root directory for remote card files by adding a third value to a line in your `cardFiles` file. This is useful if there is a collision between card file names.
 
@@ -127,4 +127,4 @@ To remap the name of a single card file you want to use, do something like this:
 
 (Note that you need to specify a card file relative path for the third value.)
 
-Remapping card files and card files path using a `cardFiles` will result in changing where the data files are written and the display name for card files when doing cards in the browser.
+Remapping card files and card files path using a `cardFiles` file will result in changing where the data files are written and it will also change the display name for card files when practicing cards in the browser.
