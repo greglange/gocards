@@ -102,13 +102,13 @@ To specify a single card file you want to use, put a line like this in the file:
 
 (Note the space before `spanish`.)
 
-This will let you use the card file `spanish/nouns.cd` found at `/home/glange/git/gocards-cards/spanish/nouns.cd` and the data file for that fill will be written inside your Gocards root directory at `spanish/nounds.cdd`.
+This will let you use the card file `spanish/nouns.cd` found at `/home/glange/git/gocards-cards/spanish/nouns.cd` and the data file for that file will be written inside your Gocards root directory at `spanish/nounds.cdd`.
 
 For now, you need to use full paths in `cardFiles`.
 
 You can use a mixture of local and remote card file locations.
 
-It is possible to change where the data files are written inside your Gocards root directory for remote card files by adding a third value to a line in your `cardFiles` file. This is useful if there is a collision between card files names.
+It is possible to change where the data files are written inside your Gocards root directory for remote card files by adding a third value to a line in your `cardFiles` file. This is useful if there is a collision between card file names.
 
 For example, look at this `cardFiles` file:
 
@@ -117,7 +117,7 @@ For example, look at this `cardFiles` file:
 /home/glange/git/source2/ spanish spanish2
 ```
 
-This will result in the card files in `/home/glange/git/source1/spanish` to be remapped to the directory `spanish1` and the card files in `/home/glange/git/source2/spanish` to be remapped to the directory `spanish2` in your Gocards root directory. This change of names will also be reflected in the name of the card sets when doing cards in the browser.
+This will result in the card files in `/home/glange/git/source1/spanish` being remapped to the directory `spanish1` and the card files in `/home/glange/git/source2/spanish` being remapped to the directory `spanish2` in your Gocards root directory.
 
 To remap the name of a single card file you want to use, do something like this:
 
@@ -126,3 +126,5 @@ To remap the name of a single card file you want to use, do something like this:
 ```
 
 (Note that you need to specify a card file relative path for the third value.)
+
+Remapping card files and card files path using a `cardFiles` will result in changing where the data files are written and the display name for card files when doing cards in the browser.
