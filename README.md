@@ -1,18 +1,26 @@
 # Gocards
 
-Gocards is a flashcards program written in Go with spaced repetition.
+Gocards is a flash cards program written in [Go](https://go.dev/) with [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition).
 
-## Project status.
+Card files and the data files that track the progress of the cards in those files are text files meant to be kept in one or more git repos (or other source control systems).
+
+Cards are created using a text editor using [Markdown](https://www.markdownguide.org/basic-syntax/) or some syntax unique to Gocards.
+
+Gocards runs a local web server and cards are done in a web browser.
+
+There are few ways images can be used in cards. They don't just have to be text.
+
+## Project status
 
 This project is under initial development.
 
 - anything might change
 - there are bugs
 - no tests
-- only verfied to work on Ubuntu
-- sparse documentation
+- verified to work on Ubuntu and Windows
+- sparse but improving documentation
 
-## Building.
+## Building
 
 Run:
 
@@ -22,9 +30,9 @@ Then:
 
 `go install cmd/gocards.go`
 
-## Quick start usage.
+## Quick start usage
 
-Make a directory to hold your gocards.
+Make a directory to hold your cards and card data files.
 
 Change dir into your directory.
 
@@ -44,60 +52,22 @@ Go to this url in your web browser to do your gocards:
 
 Click on the `esperanto.cd` link.
 
-Click on the `show other side` and `correct` buttons until you see the message `No cards found`.
+Click on the `show other side` and `correct` buttons until you see the message `No cards found`at the top of the page.
 
 Click on the `main` button.
 
-Click the `Update` button to save your progress.
+Click the `Save` button to save your progress. This writes your progress to a data file.
 
-## Cards repo.
+Note how the card count in the `New` column has changed to zero and the `1` column has a one in it. This means your card has been scheduled to be done again in one day.
 
-A git repo with flashcards usable by the gocards project an be found [here](https://github.com/greglange/gocards-cards).
+When you get a card right that is beyond the `New` or `0` status while doing spaced repetition, the card will be scheduled to be done again further and further in the future. But, if you get a card wrong, it will return to the `New` or `0` status and you will need to start over building a correct streak with that card.
 
-## Card files.
+On the main page, any link that is a gray-shaded cell is spaced repetition practice.
 
-Card files are text files that end with the file extension:
+All other links are practice where you need to get each card right once to complete the set. However, this has no effect on the cards spaced repetition status.
 
-`.cd`
+## Cards repo
 
-These files define a set of cards.
+A git repo with flash cards usable by the gocards project can be found [here](https://github.com/greglange/gocards-cards).
 
-Card data files end with the file extension:
-
-`.cdd`
-
-These files track the progress of the cards in the corresponding card file.
-
-## Card ID strings.
-
-Each card has a ID string used in the card data files to track progress.
-
-A single card file cannot contain two or more cards with the same ID string.
-
-## Markdown.
-
-Markdown is used to make cards.
-
-The markdown for each side of the card is converted into HTML when doing a card.
-
-## Single line cards.
-
-A single line card inside a card file looks like this:
-
-`side one | side two`
-
-The ID string for single line cards is the first side of the card.
-
-## Card with a multiline front side.
-
-`This front side
-
-appears on
-
-multiple lines.`
-
-## Version control system.
-
-Gocards is meant to be used with a version control system like `git`.
-
-All gocard files (both the card files and the data files) are plain text.
+The README file in this repo describes how to make card files and cards inside those files.
