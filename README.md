@@ -6,7 +6,7 @@ Card files and the data files that track the progress of the cards in those file
 
 Cards are created using a text editor using [Markdown](https://www.markdownguide.org/basic-syntax/) or some syntax unique to Gocards.
 
-Gocards runs a local web server and cards are done in a web browser.
+Gocards runs a local web server and cards are practiced in a web browser.
 
 There are few ways images can be used in cards. Cards don't just have to be text.
 
@@ -46,11 +46,11 @@ book | libro
 
 This creates a single card in that file.
 
-Run this command to run a web server to do your:
+Run this command to run a web server to practice your card:
 
 `gocards --http`
 
-Go to this url in your web browser:
+Go to this URL in your web browser:
 
 [http://localhost:8080/](http://localhost:8080)
 
