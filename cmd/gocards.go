@@ -310,11 +310,20 @@ func (h *httpHandler) handleCardSetPost(w http.ResponseWriter, r *http.Request) 
 // The page is a table with rows of card sets and links to do cards.
 // The page also has a "save" button that will save data for cards that need to be written to disk.
 func (h *httpHandler) pageMain(w http.ResponseWriter, r *http.Request) {
+	msg := ""
+	if len(h.save) > 0 {
+		msg = "needs saving"
+	}
 	fmt.Fprintf(w, "<html><head></head><body>\n")
+	fmt.Fprintf(w, "<table><tr><td>\n")
 	fmt.Fprintf(w, "<form action=\"/\" method=\"POST\">\n"+
 		"<input type=\"hidden\" name=\"action\" value=\"save\">\n"+
 		"<input type=\"submit\" value=\"Save\">\n"+
 		"</form>\n")
+	fmt.Fprintf(w, "    </td><td>\n")
+	fmt.Fprintf(w, "        <form><label>%s</label></form>\n", msg)
+	fmt.Fprintf(w, "    </td></tr>\n")
+	fmt.Fprintf(w, "</table>\n")
 	fmt.Fprintf(w, "<table border=\"1\">\n")
 	fmt.Fprintf(w, "<tr align=\"center\">\n")
 	fmt.Fprintf(w, "    <td>Card Set</td>\n")
