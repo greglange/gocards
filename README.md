@@ -26,10 +26,6 @@ Clone or download this project and change dir into the repo.
 
 Then run:
 
-`go mod tidy`
-
-And then:
-
 `go install cmd/gocards.go`
 
 ## Quick start usage
