@@ -428,21 +428,23 @@ func LoadCards(filePath string) ([]*Card, error) {
 		lineNumber += 1
 
 		if parseState == newCard {
-			sides := strings.Split(line, " | ")
-			if len(sides) == 1 {
-				id, front, parseState = parseOneSide(sides[0])
-				err = addCard(id, front, "")
-				if err != nil {
-					return nil, errorWithLineNumber(err, lineNumber)
+			if len(line) > 0 && !strings.HasPrefix(line, "#") {
+				sides := strings.Split(line, " | ")
+				if len(sides) == 1 {
+					id, front, parseState = parseOneSide(sides[0])
+					err = addCard(id, front, "")
+					if err != nil {
+						return nil, errorWithLineNumber(err, lineNumber)
+					}
+				} else if len(sides) == 2 {
+					id, front, back, parseState = parseTwoSides(sides[0], sides[1])
+					err = addCard(id, front, back)
+					if err != nil {
+						return nil, errorWithLineNumber(err, lineNumber)
+					}
+				} else {
+					return nil, errorWithLineNumber(errors.New("Unexpected number of sides"), lineNumber)
 				}
-			} else if len(sides) == 2 {
-				id, front, back, parseState = parseTwoSides(sides[0], sides[1])
-				err = addCard(id, front, back)
-				if err != nil {
-					return nil, errorWithLineNumber(err, lineNumber)
-				}
-			} else {
-				return nil, errorWithLineNumber(errors.New("Unexpected number of sides"), lineNumber)
 			}
 		} else if parseState == frontMulti {
 			if len(cards) == 0 {
